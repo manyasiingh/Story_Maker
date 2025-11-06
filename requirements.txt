@@ -1,4 +1,3 @@
-google-genai
-Pillow
-python-dotenv
+google-genai>=0.14.0
 streamlit
+python-dotenv

@@ -4,7 +4,7 @@ from google import genai
 from google.genai.errors import APIError
 from dotenv import load_dotenv
 
-
+# --- 1. CONFIGURATION AND CLIENT INITIALIZATION ---
 
 # Load environment variables from the .env file (if running locally)
 load_dotenv()
@@ -26,7 +26,7 @@ def load_gemini_client(key):
         st.error(f"Error initializing Gemini client. Check your GEMINI_API_KEY in .env or secrets: {e}")
         return None
 
-
+# --- 2. GENERATION FUNCTION ---
 
 def generate_story_stream(client: genai.Client, user_details: dict):
     """
@@ -55,13 +55,14 @@ def generate_story_stream(client: genai.Client, user_details: dict):
     
     try:
         # Use generate_content_stream to get the response chunk by chunk
+        # This function signature is correct for recent versions of google-genai
         response_stream = client.models.generate_content_stream(
             model='gemini-2.5-flash',
             contents=prompt,
             system_instruction=system_instruction
         )
         
-        
+        # Streamlit's built-in stream writer displays the content as it arrives
         st.write_stream(response_stream)
         
     except APIError as e:
@@ -69,12 +70,12 @@ def generate_story_stream(client: genai.Client, user_details: dict):
     except Exception as e:
         st.error(f"An unexpected error occurred: {e}")
 
-
+# --- 3. STREAMLIT APP LAYOUT ---
 
 def main():
     st.set_page_config(page_title="Personalized Story Maker", layout="wide")
     
-    st.title("📖 Personalized Story Maker 📖")
+    st.title("✨ Personalized Story Maker")
     st.markdown("Enter details about your character and world, and let the Gemini API weave a unique tale!")
     
     # 3a. API Key Check and Client Loading
@@ -90,7 +91,7 @@ def main():
 
     # 3b. User Inputs (Sidebar for cleaner main area)
     with st.sidebar:
-        st.header("✨ Character & Story Details")
+        st.header("Character & Story Details")
         
         # Input fields for personalization
         name = st.text_input("Main Character's Name:", "Elara")
