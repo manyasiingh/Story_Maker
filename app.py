@@ -74,7 +74,7 @@ def generate_story_stream(client: genai.Client, user_details: dict):
     except TypeError as e:
         # --- FALLBACK: If 'system_instruction' keyword fails, use the old SDK method ---
         if "'system_instruction'" in str(e):
-            st.warning("⚠️ Using legacy SDK method. Please ensure 'google-genai' is updated.")
+            #st.warning("⚠️ Using legacy SDK method. Please ensure 'google-genai' is updated.")
             
             # Combine system instruction and user prompt into a single contents string
             fallback_prompt = f"{system_instruction_text}\n\nUSER PROMPT:\n{prompt}"
