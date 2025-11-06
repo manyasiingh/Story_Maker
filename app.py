@@ -62,8 +62,14 @@ def generate_story_stream(client: genai.Client, user_details: dict):
             system_instruction=system_instruction_text
         )
         
+        # --- NEW: Helper generator to extract only the text from the response objects ---
+        def text_generator(stream):
+            for chunk in stream:
+                if chunk.text:
+                    yield chunk.text
+
         # Streamlit's built-in stream writer displays the content as it arrives
-        st.write_stream(response_stream)
+        st.write_stream(text_generator(response_stream))
         
     except TypeError as e:
         # --- FALLBACK: If 'system_instruction' keyword fails, use the old SDK method ---
@@ -78,7 +84,14 @@ def generate_story_stream(client: genai.Client, user_details: dict):
                 model='gemini-2.5-flash',
                 contents=fallback_prompt
             )
-            st.write_stream(response_stream)
+            
+            # --- NEW: Helper generator for fallback ---
+            def text_generator_fallback(stream):
+                for chunk in stream:
+                    if chunk.text:
+                        yield chunk.text
+
+            st.write_stream(text_generator_fallback(response_stream))
         else:
             # Re-raise other TypeError exceptions
             raise e
