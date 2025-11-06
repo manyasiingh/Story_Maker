@@ -1,82 +1,81 @@
 import os
 import streamlit as st
-import io
 from google import genai
 from google.genai.errors import APIError
-from PIL import Image
 from dotenv import load_dotenv
 
-# --- 1. CONFIGURATION AND CLIENT INITIALIZATION ---
 
-# Load environment variables (must happen before Streamlit runs the main logic)
-# This will load GEMINI_API_KEY from the .env file if available locally
+
+# Load environment variables from the .env file (if running locally)
 load_dotenv()
 
-# Check if the API key is available
+# The client will automatically pick up the key from the environment
 API_KEY = os.getenv("GEMINI_API_KEY")
 
 @st.cache_resource
 def load_gemini_client(key):
     """Initializes and caches the Gemini client."""
     if not key:
-        # In a real deployed environment (like Streamlit Cloud), API_KEY would be set
-        # as a secret, and this path would likely not be hit.
         return None 
     try:
-        # The client constructor can take the API key directly
+        # Initializing client with the key
         client = genai.Client(api_key=key)
         return client
     except Exception as e:
-        st.error(f"Error initializing Gemini client: {e}")
+        # In a real deployed environment, st.secrets is used, but for local use we check .env
+        st.error(f"Error initializing Gemini client. Check your GEMINI_API_KEY in .env or secrets: {e}")
         return None
 
-# --- 2. GENERATION FUNCTION ---
 
-def generate_content_stream(client: genai.Client, prompt: str, uploaded_file):
+
+def generate_story_stream(client: genai.Client, user_details: dict):
     """
-    Generates content based on text and an optional image, streaming the output.
+    Constructs the prompt and streams the generated story.
     """
-    contents = []
+    # System Instruction to define the model's persona and role
+    system_instruction = (
+        "You are a magical storyteller. You must write a creative, engaging, and unique short story "
+        "based ONLY on the user's provided details. Structure the story with an introduction, conflict, and resolution. "
+        "The story should have a clear beginning and end."
+    )
+
+    # Detailed prompt construction based on user inputs
+    prompt = f"""
+    Please write a personalized story for the main character named '{user_details['name']}'.
     
-    # Handle image content if uploaded
-    if uploaded_file is not None:
-        try:
-            # Read image data from the UploadedFile object using BytesIO
-            image_data = uploaded_file.read()
-            img = Image.open(io.BytesIO(image_data))
-            st.image(img, caption="Uploaded Image", use_column_width=True)
-            contents.append(img)
-        except Exception as e:
-            st.error(f"Could not load image: {e}")
-            return
-            
-    # Add text prompt last
-    contents.append(prompt)
+    Story Theme/Genre: {user_details['theme']}
+    Key Setting/Location: {user_details['setting']}
+    Length: {user_details['length']} words.
+
+    The main character, {user_details['name']}, loves {user_details['hobby']} and their defining personality trait is {user_details['trait']}.
+    Begin the story now:
+    """
     
-    st.subheader("Model Response")
+    st.subheader(f"📖 The Story of {user_details['name']}")
     
     try:
-        # Use generate_content_stream for a better user experience
+        # Use generate_content_stream to get the response chunk by chunk
         response_stream = client.models.generate_content_stream(
             model='gemini-2.5-flash',
-            contents=contents
+            contents=prompt,
+            system_instruction=system_instruction
         )
         
-        # Use st.write_stream to display the response in real-time
+        
         st.write_stream(response_stream)
         
     except APIError as e:
-        st.error(f"An API error occurred: {e}")
+        st.error(f"An API error occurred during story generation: {e}")
     except Exception as e:
         st.error(f"An unexpected error occurred: {e}")
 
-# --- 3. STREAMLIT APP LAYOUT ---
+
 
 def main():
-    st.set_page_config(page_title="Gemini Streamlit Multimodal Demo", layout="centered")
+    st.set_page_config(page_title="Personalized Story Maker", layout="wide")
     
-    st.title("🤖 Gemini API Streamlit App")
-    st.markdown("Use this app to generate text or analyze an image using the `gemini-2.5-flash` model.")
+    st.title("📖 Personalized Story Maker 📖")
+    st.markdown("Enter details about your character and world, and let the Gemini API weave a unique tale!")
     
     # 3a. API Key Check and Client Loading
     if not API_KEY:
@@ -87,33 +86,58 @@ def main():
 
     client = load_gemini_client(API_KEY)
     if client is None:
-        return # Client failed to initialize
+        return
 
-    # 3b. User Inputs
-    
-    uploaded_file = st.file_uploader(
-        "Upload an Image (Optional)", 
-        type=["jpg", "jpeg", "png", "webp"],
-        key="image_uploader"
-    )
-    
-    prompt = st.text_area(
-        "Enter your prompt or question:",
-        "What is a list and a tuple in Python, and how does the object in the image relate to either of those concepts?",
-        height=150
-    )
-    
-    # 3c. Generation Trigger
-    if st.button("Generate Response", use_container_width=True, type="primary"):
-        if not prompt.strip():
-            st.warning("Please enter a prompt before generating content.")
+    # 3b. User Inputs (Sidebar for cleaner main area)
+    with st.sidebar:
+        st.header("✨ Character & Story Details")
+        
+        # Input fields for personalization
+        name = st.text_input("Main Character's Name:", "Elara")
+        trait = st.text_input("Main Personality Trait (e.g., Curious, Brave):", "Determined")
+        hobby = st.text_input("A favorite hobby/interest:", "Stargazing")
+        
+        st.subheader("World Details")
+        setting = st.selectbox(
+            "Key Setting/Location:",
+            ["A bustling futuristic city", "An ancient, misty forest", "A remote, ice-covered planet", "A magical library"]
+        )
+        theme = st.selectbox(
+            "Story Theme/Genre:",
+            ["Fantasy Adventure", "Sci-Fi Mystery", "Historical Romance", "Modern Comedy"]
+        )
+        length = st.select_slider(
+            "Story Length (approximate words):",
+            options=[200, 350, 500, 750],
+            value=350
+        )
+        
+        # Dictionary to pass all details to the generation function
+        user_details = {
+            'name': name,
+            'trait': trait,
+            'hobby': hobby,
+            'setting': setting,
+            'theme': theme,
+            'length': length
+        }
+
+    # 3c. Generation Trigger (in the main area)
+    st.write("---")
+
+    if st.button("Generate My Personalized Story!", use_container_width=True, type="primary"):
+        if not name.strip():
+            st.warning("Please enter a name for your main character.")
         else:
+            # Clear previous outputs (optional, but nice for clean reruns)
+            st.empty() 
+            
             # Show a spinner while processing
-            with st.spinner("Generating content..."):
-                generate_content_stream(client, prompt, uploaded_file)
+            with st.spinner(f"Weaving a {theme} tale about {name}..."):
+                generate_story_stream(client, user_details)
                 
     st.markdown("---")
-    st.caption("Powered by Google Gemini API and Streamlit. Check the console for full details.")
+    st.caption("Powered by Google Gemini API and Streamlit.")
 
 if __name__ == "__main__":
     main()
