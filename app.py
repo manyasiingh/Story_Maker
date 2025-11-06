@@ -31,9 +31,10 @@ def load_gemini_client(key):
 def generate_story_stream(client: genai.Client, user_details: dict):
     """
     Constructs the prompt and streams the generated story.
+    Includes fallback logic for older SDKs that don't support system_instruction.
     """
-    # System Instruction to define the model's persona and role
-    system_instruction = (
+    # Define the System Instruction
+    system_instruction_text = (
         "You are a magical storyteller. You must write a creative, engaging, and unique short story "
         "based ONLY on the user's provided details. Structure the story with an introduction, conflict, and resolution. "
         "The story should have a clear beginning and end."
@@ -54,17 +55,34 @@ def generate_story_stream(client: genai.Client, user_details: dict):
     st.subheader(f"📖 The Story of {user_details['name']}")
     
     try:
-        # Use generate_content_stream to get the response chunk by chunk
-        # This function signature is correct for recent versions of google-genai
+        # --- ATTEMPT 1: Modern SDK (using system_instruction keyword) ---
         response_stream = client.models.generate_content_stream(
             model='gemini-2.5-flash',
             contents=prompt,
-            system_instruction=system_instruction
+            system_instruction=system_instruction_text
         )
         
         # Streamlit's built-in stream writer displays the content as it arrives
         st.write_stream(response_stream)
         
+    except TypeError as e:
+        # --- FALLBACK: If 'system_instruction' keyword fails, use the old SDK method ---
+        if "'system_instruction'" in str(e):
+            st.warning("⚠️ Using legacy SDK method. Please ensure 'google-genai' is updated.")
+            
+            # Combine system instruction and user prompt into a single contents string
+            fallback_prompt = f"{system_instruction_text}\n\nUSER PROMPT:\n{prompt}"
+            
+            # Call without system_instruction argument
+            response_stream = client.models.generate_content_stream(
+                model='gemini-2.5-flash',
+                contents=fallback_prompt
+            )
+            st.write_stream(response_stream)
+        else:
+            # Re-raise other TypeError exceptions
+            raise e
+            
     except APIError as e:
         st.error(f"An API error occurred during story generation: {e}")
     except Exception as e:
